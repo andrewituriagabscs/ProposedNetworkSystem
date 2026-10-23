@@ -1,0 +1,105 @@
+<section class="view-panel data-panel {% if active_view == 'ml-insights' %}active{% endif %}" data-panel="ml-insights" {% if active_view != 'ml-insights' %}hidden{% endif %}>
+    <header class="ml-heading">
+        <div>
+            <p class="eyebrow">SYSTEM 2: Proposed / Enhanced Approach</p>
+            <h1>ML Insights</h1>
+            <p class="panel-intro">1. 5-Probe ICMP Burst + Dual Reference (Min/Median/Max RTT + Gateway &amp; 1.1.1.1 + Switch OUI/Ports) &rarr; 2. Temporal Feature Engineering (12 Features: Jitter, &Delta;Latency, &Delta;Loss, 5-Sample Trend, Streak, &Delta;Time) &rarr; 3. Human-in-the-Loop Labeling (Admin-Reviewed Condition Labels) &rarr; 4. Train &amp; Run the 3 Models (Isolation Forest, GRU, XGBoost).</p>
+        </div>
+        <span class="status-pill status-normal">CLI-Trained Models</span>
+    </header>
+    <p id="ml-status-line" class="ml-status-line" role="status">Loading model readiness...</p>
+    <div id="ml-condition-readiness-badges" style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px 0;"></div>
+    <p id="ml-action-status" role="status"></p>
+    <section class="summary-cards ml-cards">
+        <div class="card">
+            <h2>Isolation Forest</h2>
+            <p id="if-model-state">Checking</p>
+            <small id="if-model-detail">Unsupervised anomaly detection</small>
+        </div>
+        <div class="card">
+            <h2>GRU</h2>
+            <p id="gru-model-state">Checking</p>
+            <small id="gru-model-detail">Time-series latency &amp; loss forecast</small>
+        </div>
+        <div class="card">
+            <h2>XGBoost (Active Recommender)</h2>
+            <p id="xgb-model-state">Checking</p>
+            <small id="xgb-model-detail">Supervised condition classification &amp; recommendations</small>
+        </div>
+    </section>
+    <section class="ml-results-section">
+        <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+                <h2>4. Train &amp; Run the 3 Models (Isolation Forest, GRU, XGBoost)</h2>
+                <p class="panel-intro" style="margin-bottom:0;">Runs Isolation Forest (unsupervised anomaly detection), GRU (time-series forecast), and XGBoost (supervised condition classification) on the 12 temporal features from each 5-probe burst.</p>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center;">
+                <label style="font-size:0.9rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="show-normal-recommendations" onchange="renderMlRecommendationsPage()">
+                    Show healthy (Normal) devices
+                </label>
+                <button class="range-button" type="button" onclick="refreshMlPanel()">↻ Refresh</button>
+            </div>
+        </div>
+        <div class="table-wrap" style="margin-top:12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>PC / Device</th>
+                        <th>5-Probe Burst (Min/Med/Max &amp; Jitter)</th><th>Isolation Forest</th><th>GRU Forecast</th>
+                        <th>Supervised Diagnosis (XGBoost)</th>
+                        <th>Possible Threat / Cause</th>
+                        <th>Recommended Action</th>
+                    </tr>
+                </thead>
+                <tbody id="ml-recommendation-rows">
+                    <tr><td colspan="7">Loading 3-model insights &amp; recommendations...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="ml-recommendations-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+        <details style="margin-top:18px;border:1px solid rgba(128,128,128,0.25);border-radius:10px;padding:12px 16px;">
+            <summary style="cursor:pointer;font-weight:600;">1. 5-Probe ICMP Burst + Dual Reference Status (Local Gateway &amp; 1.1.1.1)</summary>
+            <div style="margin-top:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <small>Compares 5-probe burst latency &amp; jitter against the Local Gateway and External Reference (1.1.1.1).</small>
+                    <button class="range-button" type="button" onclick="pollNetworkReferences(this)">↻ Ping Dual Reference</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Reference</th><th>Target</th><th>Status</th><th>Packet Loss</th><th>Median RTT</th><th>Burst Jitter</th></tr>
+                        </thead>
+                        <tbody id="reference-rows"><tr><td colspan="6">Loading Dual Reference status...</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="table-wrap" style="margin-top:10px;">
+                    <table>
+                        <thead>
+                            <tr><th>Monitored Device</th><th>Packet Loss</th><th>Median RTT</th><th>Burst Jitter</th><th>Dual Reference Comparison</th></tr>
+                        </thead>
+                        <tbody id="reference-device-rows"><tr><td colspan="5">Loading device comparisons...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        <details style="margin-top:12px;border:1px solid rgba(128,128,128,0.25);border-radius:10px;padding:12px 16px;">
+            <summary style="cursor:pointer;font-weight:600;">3. Human-in-the-Loop Labeling (Admin-Reviewed Condition Labels)</summary>
+            <div style="margin-top:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <small>Review and save condition labels (Normal, High Latency, Packet Loss, Unreachable) for 5-probe burst samples.</small>
+                    <button class="range-button" type="button" onclick="applyAutoRuleLabels(this)">✓ Confirm Suggested Labels</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>Recorded At</th><th>Device</th><th>5-Probe Median RTT</th><th>Packet Loss</th><th>Admin-Reviewed Condition Label</th><th>Action</th></tr>
+                        </thead>
+                        <tbody id="ml-label-rows"><tr><td colspan="6">Loading samples for Human-in-the-Loop review...</td></tr></tbody>
+                    </table>
+                </div>
+                <div id="ml-labels-pagination" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px;"></div>
+            </div>
+        </details>
+    </section>
+</section>

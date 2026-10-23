@@ -1,0 +1,16 @@
+<section class="view-panel data-panel {% if active_view == 'alerts' %}active{% endif %}" data-panel="alerts" {% if active_view != 'alerts' %}hidden{% endif %}>
+    <p class="eyebrow">Ping events</p>
+    <h1>Alerts</h1>
+    <p class="panel-intro">Unreachable PCs and high-latency ping results.</p>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Time</th><th>PC</th><th>Event</th><th>Status</th></tr>
+            </thead>
+            <tbody id="all-alerts-rows">
+                <tr><td colspan="4">Waiting for live status...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="all-alerts-pagination" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:16px"></div>
+</section>

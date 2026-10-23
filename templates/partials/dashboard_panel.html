@@ -1,0 +1,48 @@
+<section class="view-panel {% if active_view == 'dashboard' %}active{% endif %}" data-panel="dashboard" {% if active_view != 'dashboard' %}hidden{% endif %}>
+    <header>
+        <div>
+            <p class="eyebrow">ICMP network status</p>
+            <h1>Ping Monitoring System<small id="building-name" style="font-size: 0.6em; color: #666; display: block; margin-top: 0.25em;">Loading location...</small></h1>
+            <p>Updated <span id="dashboard-updated">Waiting for live samples</span></p>
+        </div>
+        <button class="refresh-button" type="button" onclick="refreshStatus()">↻ <span>Refresh</span></button>
+    </header>
+    <section class="summary-cards">
+        <div class="card"><h2>Saved PCs</h2><p id="saved-count">0</p></div>
+        <div class="card"><h2>Monitoring</h2><p id="active-count">0</p></div>
+        <div class="card"><h2>Network status</h2><p id="network-health">Waiting</p></div>
+        <div class="card"><h2>Open alerts</h2><p id="open-alerts">0</p></div>
+    </section>
+    <section class="metrics">
+        <h2>Ping metrics</h2>
+        <div class="metric-grid">
+            <div class="metric-card"><strong>Average Latency</strong><span id="metric-average-latency">Loading</span><small>Live ping</small></div>
+            <div class="metric-card"><strong>Reachable</strong><span id="metric-reachable">0</span><small>Latest ping per PC</small></div>
+            <div class="metric-card"><strong>Monitoring</strong><span id="metric-monitoring">0</span><small>Selected PCs</small></div>
+            <div class="metric-card"><strong>Ping Samples</strong><span id="metric-samples">0</span><small>Recent records</small></div>
+        </div>
+    </section>
+    <section class="ml-overview">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">SYSTEM 2: Proposed / Enhanced Approach</p>
+                <h2>Machine learning pipeline</h2>
+            </div>
+            <span class="status-pill status-normal">5-Probe Burst &bull; 12 Temporal Features &bull; Admin-Reviewed Labels</span>
+        </div>
+        <div class="summary-cards ml-cards">
+            <div class="card"><h2>1. 5-Probe ICMP Burst + Dual Reference</h2><p class="small-value">Min/Median/Max RTT + Dual Ref</p><small>Gateway &amp; 1.1.1.1 + Switch OUI/Ports</small></div>
+            <div class="card"><h2>2. Temporal Feature Engineering</h2><p class="small-value">12 Temporal Features</p><small>Jitter, &Delta;Latency, &Delta;Loss, 5-Sample Trend, Streak, &Delta;Time</small></div>
+            <div class="card"><h2>3. Human-in-the-Loop Labeling</h2><p id="dashboard-labeled-samples">0</p><small>Admin-Reviewed Condition Labels (<span id="dashboard-valid-samples">0</span> samples)</small></div>
+            <div class="card"><h2>4. Train &amp; Run the 3 Models</h2><p id="dashboard-ml-model" class="small-value">Isolation Forest, GRU, XGBoost</p><small id="dashboard-ml-version">Loading readiness</small></div>
+        </div>
+    </section>
+    <section class="alerts">
+        <h2>Recent alerts</h2>
+        <table>
+            <thead><tr><th>Time</th><th>PC</th><th>Ping event</th></tr></thead>
+            <tbody id="alert-rows"><tr><td colspan="3">Waiting for live status...</td></tr></tbody>
+        </table>
+        <div id="alerts-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+    </section>
+</section>

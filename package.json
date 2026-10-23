@@ -1,0 +1,26 @@
+{
+    "name": "proposed-network-monitoring-system",
+    "version": "2.0.0",
+    "private": true,
+    "type": "module",
+    "description": "Unified Ping Monitoring System with 5-Probe Burst & ML Diagnostics",
+    "scripts": {
+        "dev": "concurrently -k --names \"LARAVEL,PYTHON\" -c \"blue,yellow\" \"php artisan serve --port=8000\" \"python -u app.py\"",
+        "dev:all": "concurrently -k --names \"LARAVEL,PYTHON\" -c \"blue,yellow\" \"php artisan serve --port=8000\" \"python -u app.py\"",
+        "start": "concurrently -k --names \"LARAVEL,PYTHON\" -c \"blue,yellow\" \"php artisan serve --port=8000\" \"python -u app.py\"",
+        "serve:laravel": "php artisan serve --port=8000",
+        "serve:python": "python -u app.py",
+        "app": "python desktop_app.py",
+        "test": "python -m unittest discover tests",
+        "test:laravel": "php artisan test",
+        "ml:status": "python -u train_pipeline.py --status",
+        "train:if": "python -u train_pipeline.py --model isolation_forest",
+        "train:gru": "python -u train_pipeline.py --model gru",
+        "train:xgb": "python -u train_pipeline.py --model xgboost",
+        "train:all": "python -u train_pipeline.py --model all",
+        "train:online": "python -u train_pipeline.py --import-online --model all"
+    },
+    "devDependencies": {
+        "concurrently": "^9.1.2"
+    }
+}

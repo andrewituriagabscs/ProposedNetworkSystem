@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Node / NPM
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# PHP / Composer / Laravel
+/vendor/
+.phpunit.result.cache
+storage/*.key
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+storage/logs/*
+!storage/framework/cache/data/.gitignore
+!storage/framework/sessions/.gitignore
+!storage/framework/testing/.gitignore
+!storage/framework/views/.gitignore
+!storage/logs/.gitignore
+
+# Environment & Credentials
+.env
+.env.backup
+.env.production
+*.env.*
+
+# PyInstaller / Build
+build/
+dist/
+*.spec.bak
+
+# SQLite temporary WAL / SHM files
+*.db-wal
+*.db-shm
+
+# ML Models & Checkpoints
+models/*.joblib
+models/training_status.json
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store

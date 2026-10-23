@@ -1,0 +1,89 @@
+<section class="view-panel data-panel {% if active_view == 'ping' %}active{% endif %}" data-panel="ping" {% if active_view != 'ping' %}hidden{% endif %}>
+    <div class="monitor-heading">
+        <div>
+            <p class="eyebrow">Local network</p>
+            <h1>Ping &amp; Device Monitor</h1>
+            <p class="panel-intro">Discover responding devices (PCs and phones), select the ones to monitor, and start 5-probe ICMP ping checks.</p>
+        </div>
+        <button class="refresh-button" type="button" onclick="pollNow(this)">↻ <span>Ping now</span></button>
+    </div>
+    <section class="discovery-controls">
+        <label for="subnet-input">Subnet to discover</label>
+        <div class="discovery-row">
+            <input id="subnet-input" type="text" inputmode="decimal" aria-label="Local IPv4 subnet in CIDR notation">
+            <button class="refresh-button" id="discover-button" type="button" onclick="discoverHosts(this)">⌕ <span>Discover PCs</span></button>
+            <button class="refresh-button" id="auto-discover-toggle" type="button" onclick="toggleAutoDiscover(this)" style="display: none;">⟳ <span>Auto refresh: off</span></button>
+        </div>
+        <div class="discovery-options">
+            <div>
+                <label for="discovery-limit">Discover up to:</label>
+                <input id="discovery-limit" type="number" value="20" min="1" max="999" style="width: 60px; padding: 6px;">
+                <select id="limit-presets" onchange="document.querySelector('#discovery-limit').value = this.value;" style="padding: 6px; margin-left: 8px;">
+                    <option value="">Presets:</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="256">All</option>
+                </select>
+            </div>
+            <div style="margin-top: 8px;">
+                <label><input type="checkbox" id="show-phones-toggle" checked onchange="filterDiscoveryRows()"> Show phones (📱)</label>
+            </div>
+        </div>
+        <p id="discovery-status" role="status"></p>
+    </section>
+    <section id="discovery-section" hidden>
+        <div class="section-heading">
+            <h2>Available Devices</h2>
+            <button class="refresh-button" type="button" onclick="addSelectedHosts()">＋ <span>Add selected</span></button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Select</th><th>Device / hostname</th><th>IPv4 address</th><th>Device Type</th></tr>
+                </thead>
+                <tbody id="discovered-rows"></tbody>
+            </table>
+        </div>
+    </section>
+    <section>
+        <div class="section-heading">
+            <h2>Selected Devices</h2>
+            <span id="monitor-summary"></span>
+        </div>
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+            <input id="monitor-search" type="text" placeholder="Search by IP or hostname..." style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" onkeyup="applySearchAndPagination()">
+            <select id="device-type-filter" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;" onchange="applySearchAndPagination()">
+                <option value="">All devices</option>
+                <option value="pc">💻 PCs only</option>
+                <option value="phone">📱 Phones only</option>
+                <option value="switch">🔀 Switches only</option>
+            </select>
+            <button class="refresh-button" type="button" onclick="clearMonitorSearch()" style="padding: 6px 12px;">✕ <span>Clear</span></button>
+            <button class="refresh-button" type="button" onclick="reclassifyAllDevices()" style="padding: 6px 12px; background: #2196F3;" title="Re-detect PC / Phone / Switch for all monitored devices">🔀 <span>Re-detect types</span></button>
+            <button class="refresh-button" type="button" onclick="bulkStartAll()" style="padding: 6px 12px; background: #4CAF50;">▶ <span>Start All</span></button>
+            <button class="refresh-button" type="button" onclick="bulkPauseAll()" style="padding: 6px 12px; background: #FF9800;">⏸ <span>Pause All</span></button>
+        </div>
+        <div class="chart-card">
+            <div class="chart-heading">
+                <div>
+                    <h2>Ping latency</h2>
+                    <small>Median of 5-probe ICMP burst per check (System 2 Proposed); Windows may report values as &lt;1 ms.</small>
+                </div>
+                <label for="chart-device">Device</label>
+                <select id="chart-device" aria-label="Select device for latency chart" onchange="drawPingChart()"></select>
+            </div>
+            <canvas id="ping-chart" height="220"></canvas>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Device</th><th>IPv4 address</th><th>Mac Address</th><th>Type</th><th>Latest ping</th><th>Min</th><th>Median</th><th>Max</th><th>Loss</th><th>Interval (sec)</th><th>Control</th></tr>
+                </thead>
+                <tbody id="monitored-rows"></tbody>
+            </table>
+        </div>
+        <div id="pagination-controls" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+    </section>
+</section>

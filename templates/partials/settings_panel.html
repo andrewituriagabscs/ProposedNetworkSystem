@@ -1,0 +1,63 @@
+<section class="view-panel data-panel {% if active_view == 'settings' %}active{% endif %}" data-panel="settings" {% if active_view != 'settings' %}hidden{% endif %}>
+    <p class="eyebrow">Display and monitoring</p>
+    <h1>Settings</h1>
+    <div class="settings-list">
+        <div class="appearance-setting">
+            <div class="theme-logo" aria-hidden="true">
+                <span class="theme-sun">☀</span>
+                <span class="theme-moon">☾</span>
+            </div>
+            <div>
+                <strong>Appearance</strong>
+                <small id="theme-label">Light mode</small>
+            </div>
+            <label class="switch-control" for="theme-toggle">
+                <span class="sr-only">Turn dark mode on or off</span>
+                <input id="theme-toggle" type="checkbox">
+                <span class="switch-slider"></span>
+            </label>
+        </div>
+        <div class="building-setting">
+            <div>
+                <strong>Building/Location name</strong>
+                <small>Identifies this monitoring instance.</small>
+            </div>
+            <div class="building-controls">
+                <input id="building-name-input" type="text" placeholder="Building 1" value="Loading location..." aria-label="Building name">
+                <button class="range-button" type="button" onclick="saveBuildingName()">Save</button>
+            </div>
+        </div>
+        <div class="building-setting">
+            <div>
+                <strong>Saved databases</strong>
+                <small>Switch to a different building's database.</small>
+            </div>
+            <div class="building-controls">
+                <select id="database-selector" aria-label="Select database">
+                    <option value="">Loading...</option>
+                </select>
+                <button class="range-button" type="button" onclick="switchDatabase()">Switch</button>
+            </div>
+        </div>
+        <div class="building-setting">
+            <div>
+                <strong>Restart monitoring</strong>
+                <small>Restart the polling and recording service.</small>
+            </div>
+            <div class="building-controls">
+                <button class="range-button" type="button" onclick="restartMonitoring()">Restart</button>
+            </div>
+        </div>
+        <div class="reference-setting">
+            <div>
+                <strong>External ping reference</strong>
+                <small>IPv4 address; some hosts may block ICMP.</small>
+            </div>
+            <div class="reference-controls">
+                <input id="external-reference-ip" type="text" inputmode="decimal" placeholder="1.1.1.1" aria-label="External reference IPv4 address">
+                <button class="range-button" type="button" onclick="saveExternalReference()">Save</button>
+            </div>
+        </div>
+    </div>
+    <p id="reference-setting-status" role="status"></p>
+</section>

@@ -1,0 +1,16 @@
+<section class="view-panel data-panel {% if active_view == 'about' %}active{% endif %}" data-panel="about" {% if active_view != 'about' %}hidden{% endif %}>
+    <p class="eyebrow">ICMP monitoring</p>
+    <h1>About</h1>
+    <p class="panel-intro">This system checks PC reachability, packet loss, and round-trip latency using ping.</p>
+    <div class="card" style="margin-top: 1.5rem; max-width: 680px;">
+        <h2>System Architecture</h2>
+        <p style="margin-top: 0.5rem; color: #555; line-height: 1.6;">
+            <strong>PingWatch</strong> is an enhanced ICMP monitoring and diagnostic suite. It combines 5-probe burst latency measurements, dual gateway/external reference comparison, and a 3-model machine learning pipeline (Isolation Forest, GRU, XGBoost) for automated anomaly detection, reachability forecasting, and actionable network troubleshooting recommendations.
+        </p>
+        <ul style="margin-top: 1rem; padding-left: 1.25rem; color: #555; line-height: 1.8;">
+            <li><strong>Port:</strong> Configured for local dashboard and separated navigation routes.</li>
+            <li><strong>Persistence:</strong> Crash-safe SQLite storage with multi-building database switching.</li>
+            <li><strong>ML Pipeline:</strong> 12 temporal feature extraction pipeline with human-in-the-loop validation.</li>
+        </ul>
+    </div>
+</section>

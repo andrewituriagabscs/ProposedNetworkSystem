@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ping Monitoring System{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Main navigation">
+            <div class="brand"><span class="brand-mark" aria-hidden="true">P</span><span>PingWatch</span></div>
+            <nav class="nav-list">
+                <a class="nav-item {% if active_view == 'dashboard' or not active_view %}active{% endif %}" href="/dashboard" data-view="dashboard" {% if active_view == 'dashboard' or not active_view %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span></a>
+                <a class="nav-item {% if active_view == 'ping' or active_view == 'monitor' %}active{% endif %}" href="/ping" data-view="ping" {% if active_view == 'ping' or active_view == 'monitor' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">◉</span><span>Ping</span></a>
+                <a class="nav-item {% if active_view == 'alerts' %}active{% endif %}" href="/alerts" data-view="alerts" {% if active_view == 'alerts' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">!</span><span>Alerts</span></a>
+                <a class="nav-item {% if active_view == 'records' or active_view == 'reports' %}active{% endif %}" href="/records" data-view="records" {% if active_view == 'records' or active_view == 'reports' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">▤</span><span>Ping Records</span></a>
+                <a class="nav-item {% if active_view == 'ml-insights' %}active{% endif %}" href="/ml-insights" data-view="ml-insights" {% if active_view == 'ml-insights' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⌁</span><span>ML Insights</span></a>
+            </nav>
+            <nav class="nav-list nav-list-bottom" aria-label="Preferences">
+                <a class="nav-item {% if active_view == 'settings' %}active{% endif %}" href="/settings" data-view="settings" {% if active_view == 'settings' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">⚙</span><span>Settings</span></a>
+                <a class="nav-item {% if active_view == 'about' %}active{% endif %}" href="/about" data-view="about" {% if active_view == 'about' %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">?</span><span>About</span></a>
+            </nav>
+        </aside>
+
+        <main class="page">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Modular Application Scripts -->
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/router.js"></script>
+    <script src="/static/js/ping_chart.js"></script>
+    <script src="/static/js/devices.js"></script>
+    <script src="/static/js/records_alerts.js"></script>
+    <script src="/static/js/ml.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/app.js"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

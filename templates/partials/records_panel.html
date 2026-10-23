@@ -1,0 +1,28 @@
+<section class="view-panel data-panel {% if active_view == 'records' %}active{% endif %}" data-panel="records" {% if active_view != 'records' %}hidden{% endif %}>
+    <p class="eyebrow">ICMP history</p>
+    <h1>Ping Records</h1>
+    <p class="panel-intro">Saved ping replies, packet loss, and latency statistics.</p>
+    <p>
+        <a class="refresh-button" href="/api/dataset.csv">Download ping dataset</a>
+        <a class="refresh-button" href="/api/model-records.csv">Download ping records</a>
+    </p>
+    <div class="history-toolbar">
+        <strong>History range</strong>
+        <div class="range-buttons">
+            <button type="button" class="range-button active" data-hours="1">1 hour</button>
+            <button type="button" class="range-button" data-hours="24">24 hours</button>
+            <button type="button" class="range-button" data-hours="168">7 days</button>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table id="reports-table">
+            <thead>
+                <tr><th>Time</th><th>PC</th><th>IP</th><th>Replies</th><th>Loss</th><th>Min</th><th>Median</th><th>Max</th></tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="8">Waiting for live ping records...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="ping-records-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+</section>
