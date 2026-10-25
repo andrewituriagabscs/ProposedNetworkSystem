@@ -14,7 +14,8 @@ class PythonApiController extends Controller
      */
     private function ensurePythonRunning(): void
     {
-        $fp = @fsockopen('127.0.0.1', 5000, $errno, $errstr, 0.2);
+        $port = (int) parse_url(config('services.python_monitoring.url', 'http://127.0.0.1:5001'), PHP_URL_PORT) ?: 5001;
+        $fp = @fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2);
         if ($fp) {
             fclose($fp);
             return;
@@ -24,14 +25,14 @@ class PythonApiController extends Controller
         if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
             pclose(popen("start /B python -u \"{$baseDir}\\app.py\"", "r"));
         } else {
-            exec("python -u \"{$baseDir}/app.py\" > /dev/null 2>&1 &");
+            exec("PORT={$port} python -u \"{$baseDir}/app.py\" > /dev/null 2>&1 &");
         }
         usleep(400000); // 400ms warmup
     }
 
     public function forward(Request $request, string $path): Response
     {
-        $baseUrl = rtrim((string) config('services.python_monitoring.url', 'http://127.0.0.1:5000'), '/');
+        $baseUrl = rtrim((string) config('services.python_monitoring.url', 'http://127.0.0.1:5001'), '/');
         $pendingRequest = Http::connectTimeout(3)
             ->timeout(180)
             ->accept($request->header('Accept', 'application/json'));
