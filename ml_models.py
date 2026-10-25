@@ -603,6 +603,11 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
                 "severity": "critical",
                 "possible_cause": f"Possible DDoS / Traffic Flood or Severe Burst Jitter ({jitter:g} ms spread)",
                 "recommended_action": "Block / Rate-Limit: Block suspicious source IPs on the firewall, enable ICMP flood protection / rate-limiting on the switch port, or isolate the overloaded host.",
+                "action_steps": [
+                    "Inspect top bandwidth-consuming processes or burst traffic on host.",
+                    "Enable switch port rate-limiting or ICMP flood protection.",
+                    "Compare latency with Dual Reference (Gateway & 1.1.1.1) to isolate host vs uplink."
+                ],
             }
         return {
             "trained": trained,
@@ -612,6 +617,11 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
             "severity": "warning",
             "possible_cause": f"Network Bottleneck / Rising 5-Sample Trend (Jitter: {jitter:g} ms)",
             "recommended_action": "Prioritize / Throttle: Compare against Local Gateway & 1.1.1.1, check for heavy transfers on this host, apply QoS prioritization, or inspect switch port load.",
+            "action_steps": [
+                "Compare 5-probe burst jitter and 5-sample trend against Local Gateway & 1.1.1.1.",
+                "Check for heavy downloads, backups, or cloud sync on this host.",
+                "Apply QoS traffic prioritization on switch port."
+            ],
         }
 
     if condition == "Packet Loss":
@@ -623,6 +633,11 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
             "severity": "warning",
             "possible_cause": "5-Probe Burst Packet Drop / Unstable Link or Broadcast Storm",
             "recommended_action": "Inspect Link / Switch Port: Compare against Dual Reference (Gateway & 1.1.1.1), check physical Ethernet cable or Wi-Fi signal, inspect switch port for CRC/duplex errors, or block broadcast storms.",
+            "action_steps": [
+                "Compare packet loss against Dual Reference (Gateway & 1.1.1.1) to isolate link vs ISP drop.",
+                "Inspect physical RJ-45 cable, connector, or Wi-Fi signal strength.",
+                "Check switch port statistics for duplex mismatch or CRC errors."
+            ],
         }
 
     if condition == "Unreachable":
@@ -632,8 +647,14 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
             "condition": "Unreachable",
             "confidence": confidence,
             "severity": "critical",
-            "possible_cause": "Host Offline (0/5 Probes), Cable Unplugged, or DoS / Firewall Block",
-            "recommended_action": "Check Host / Mitigate DoS: Compare with Dual Reference (Gateway & 1.1.1.1) and Switch OUI/Ports. If powered on, check firewall ICMP rules or block attacking IPs if a DoS flood knocked the host offline.",
+            "possible_cause": "Host Offline (0/5 Probes), Cable Disconnected, Power Off, or ICMP Block",
+            "recommended_action": "Check Host / Mitigate Outage: Compare with Dual Reference (Gateway & 1.1.1.1) and Switch OUI/Ports. Verify power & link lights, and check router DHCP lease.",
+            "action_steps": [
+                "Verify hardware power and physical RJ-45 Ethernet link lights (PC & switch).",
+                "Check router DHCP client lease table to confirm IP assignment & verify no IP collision.",
+                "Verify endpoint Windows Firewall allows incoming ICMP Echo requests.",
+                "Compare with Dual Reference (Gateway & 1.1.1.1) and check upstream switch port state."
+            ],
         }
 
     if if_anomaly or gru_high_risk:
@@ -652,6 +673,10 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
             "severity": "warning",
             "possible_cause": " + ".join(cause_parts),
             "recommended_action": "Proactive Check: Compare 5-probe burst jitter and 5-sample trend against Local Gateway & 1.1.1.1 before degradation escalates.",
+            "action_steps": [
+                "Proactive Check: Inspect 5-probe burst jitter and 5-sample trend before degradation escalates.",
+                "Verify host baseline against Local Gateway & 1.1.1.1."
+            ],
         }
 
     return {
@@ -662,6 +687,10 @@ def _supervised_recommendation(item: dict[str, Any]) -> dict[str, Any]:
         "severity": "normal",
         "possible_cause": "Healthy 5-Probe Burst Response (Low Jitter, 0% Loss)",
         "recommended_action": "Continue monitoring — no action required.",
+        "action_steps": [
+            "Healthy 5-probe burst response verified (low jitter, 0% packet loss).",
+            "Continue routine monitoring."
+        ],
     }
 
 

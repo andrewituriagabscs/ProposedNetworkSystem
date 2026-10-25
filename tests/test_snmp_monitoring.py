@@ -16,6 +16,10 @@ class SNMPMonitoringTest(unittest.TestCase):
         self.assertIsNone(snapshot["error"])
 
     def test_builds_read_only_v2c_and_v3_authentication(self):
+        try:
+            import pysnmp
+        except ImportError:
+            self.skipTest("pysnmp is optional and not installed")
         with patch.dict(os.environ, {"SNMP_VERSION": "2c", "SNMP_COMMUNITY": "test-read-only"}, clear=True):
             v2c_auth, v2c_state = monitoring._snmp_auth_data()
 

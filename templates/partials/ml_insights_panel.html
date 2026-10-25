@@ -27,11 +27,47 @@
             <small id="xgb-model-detail">Supervised condition classification &amp; recommendations</small>
         </div>
     </section>
-    <section class="ml-results-section">
+    <!-- SPOT 1: CRITICAL OUTAGES (UNREACHABLE DEVICES) -->
+    <section class="ml-results-section" style="border-left: 4px solid #c62828; margin-bottom: 24px; padding-left: 16px;">
         <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
             <div>
-                <h2>4. Train &amp; Run the 3 Models (Isolation Forest, GRU, XGBoost)</h2>
-                <p class="panel-intro" style="margin-bottom:0;">Runs Isolation Forest (unsupervised anomaly detection), GRU (time-series forecast), and XGBoost (supervised condition classification) on the 12 temporal features from each 5-probe burst.</p>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <h2 style="margin:0;">🚨 Spot 1: Critical Outages (Unreachable Devices)</h2>
+                    <span class="status-pill status-down" id="ml-unreachable-count-pill">0 Unreachable</span>
+                </div>
+                <p class="panel-intro" style="margin-bottom:0;">Immediate intervention required. Monitored endpoints failing ICMP ping responses (100% loss / host down).</p>
+            </div>
+            <div style="display:flex;gap:14px;align-items:center;">
+                <button class="range-button" type="button" onclick="refreshMlPanel()">↻ Refresh</button>
+            </div>
+        </div>
+        <div class="table-wrap" style="margin-top:12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="min-width:160px;">PC / Device</th>
+                        <th style="min-width:120px;">Latest Ping</th>
+                        <th style="min-width:160px;">Supervised Diagnosis</th>
+                        <th style="min-width:240px;">Possible Cause / Threat</th>
+                    </tr>
+                </thead>
+                <tbody id="ml-unreachable-rows">
+                    <tr><td colspan="4">Loading unreachable devices...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div id="ml-unreachable-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+    </section>
+
+    <!-- SPOT 2: PERFORMANCE ANOMALIES (HIGH LATENCY & PACKET LOSS) -->
+    <section class="ml-results-section" style="border-left: 4px solid #ef6c00; padding-left: 16px;">
+        <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <h2 style="margin:0;">⚠️ Spot 2: Performance Anomalies (High Latency &amp; Packet Loss)</h2>
+                    <span class="status-pill status-warning" id="ml-performance-count-pill">0 Anomalies</span>
+                </div>
+                <p class="panel-intro" style="margin-bottom:0;">Network degradation and congestion detected. Requires bandwidth inspection, port error checks, or QoS tuning.</p>
             </div>
             <div style="display:flex;gap:14px;align-items:center;">
                 <label style="font-size:0.9rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
@@ -45,19 +81,19 @@
             <table>
                 <thead>
                     <tr>
-                        <th>PC / Device</th>
-                        <th>5-Probe Burst (Min/Med/Max &amp; Jitter)</th><th>Isolation Forest</th><th>GRU Forecast</th>
-                        <th>Supervised Diagnosis (XGBoost)</th>
-                        <th>Possible Threat / Cause</th>
-                        <th>Recommended Action</th>
+                        <th style="min-width:140px;">PC / Device</th>
+                        <th style="min-width:110px;">Latest Ping</th>
+                        <th style="min-width:140px;">Supervised Diagnosis</th>
+                        <th style="min-width:180px;">Possible Cause / Threat</th>
+                        <th style="min-width:320px;">Prioritized Remediation &amp; Action Steps</th>
                     </tr>
                 </thead>
-                <tbody id="ml-recommendation-rows">
-                    <tr><td colspan="7">Loading 3-model insights &amp; recommendations...</td></tr>
+                <tbody id="ml-performance-rows">
+                    <tr><td colspan="5">Loading performance anomalies...</td></tr>
                 </tbody>
             </table>
         </div>
-        <div id="ml-recommendations-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+        <div id="ml-performance-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
         <details style="margin-top:18px;border:1px solid rgba(128,128,128,0.25);border-radius:10px;padding:12px 16px;">
             <summary style="cursor:pointer;font-weight:600;">1. 5-Probe ICMP Burst + Dual Reference Status (Local Gateway &amp; 1.1.1.1)</summary>
             <div style="margin-top:12px;">

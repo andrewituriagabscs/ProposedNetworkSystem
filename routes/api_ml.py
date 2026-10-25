@@ -173,6 +173,7 @@ def ml_recommendation_feedback():
 def select_ml_recommendation(telemetry_id: int):
     payload = request.get_json(silent=True) or {}
     suggestion_id = payload.get("suggestion_id")
+    action_text = payload.get("action") or payload.get("action_text")
     samples, _ = get_ml_training_data()
     insight = next(
         (item for item in get_ml_insights(samples) if item["telemetry_id"] == telemetry_id),
@@ -181,11 +182,19 @@ def select_ml_recommendation(telemetry_id: int):
     if not insight:
         return jsonify({"error": "Current valid ICMP sample not found"}), 404
     suggestion = next(
-        (item for item in insight["suggestions"] if item["id"] == suggestion_id),
+        (item for item in insight.get("suggestions", []) if item["id"] == suggestion_id),
         None,
     )
     if not suggestion:
-        return jsonify({"error": "That suggestion is not available for this sample"}), 400
+        supervised = insight.get("supervised_recommendation") or {}
+        condition = supervised.get("condition", "General")
+        chosen_action = action_text or suggestion_id or "Custom Action"
+        suggestion = {
+            "id": suggestion_id or "action_step",
+            "action": chosen_action,
+            "model_sources": ["XGBoost (Supervised System 2)"],
+            "evidence": [f"Remediation action selected for condition: {condition}"],
+        }
     feedback_id = save_recommendation_selection(
         telemetry_id, insight["target"], suggestion
     )

@@ -115,11 +115,47 @@
                         <small id="xgb-model-detail">Supervised condition classification &amp; recommendations</small>
                     </div>
                 </section>
-                <section class="ml-results-section">
+                <!-- SPOT 1: CRITICAL OUTAGES (UNREACHABLE DEVICES) -->
+                <section class="ml-results-section" style="border-left: 4px solid #c62828; margin-bottom: 24px; padding-left: 16px;">
                     <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
                         <div>
-                            <h2>Supervised Anomaly Recommendations (XGBoost)</h2>
-                            <p class="panel-intro" style="margin-bottom:0;">Displays actionable recommendations from the supervised classifier whenever an abnormal condition or potential attack is detected.</p>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <h2 style="margin:0;">🚨 Spot 1: Critical Outages (Unreachable Devices)</h2>
+                                <span class="status-pill status-down" id="ml-unreachable-count-pill">0 Unreachable</span>
+                            </div>
+                            <p class="panel-intro" style="margin-bottom:0;">Immediate intervention required. Monitored endpoints failing ICMP ping responses (100% loss / host down).</p>
+                        </div>
+                        <div style="display:flex;gap:14px;align-items:center;">
+                            <button class="range-button" type="button" onclick="refreshMlPanel()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap" style="margin-top:12px;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="min-width:160px;">PC / Device</th>
+                                    <th style="min-width:120px;">Latest Ping</th>
+                                    <th style="min-width:160px;">Supervised Diagnosis</th>
+                                    <th style="min-width:240px;">Possible Cause / Threat</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ml-unreachable-rows">
+                                <tr><td colspan="4">Loading unreachable devices...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="ml-unreachable-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+                </section>
+
+                <!-- SPOT 2: PERFORMANCE ANOMALIES (HIGH LATENCY & PACKET LOSS) -->
+                <section class="ml-results-section" style="border-left: 4px solid #ef6c00; padding-left: 16px;">
+                    <div class="section-heading" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+                        <div>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <h2 style="margin:0;">⚠️ Spot 2: Performance Anomalies (High Latency &amp; Packet Loss)</h2>
+                                <span class="status-pill status-warning" id="ml-performance-count-pill">0 Anomalies</span>
+                            </div>
+                            <p class="panel-intro" style="margin-bottom:0;">Network degradation and congestion detected. Requires bandwidth inspection, port error checks, or QoS tuning.</p>
                         </div>
                         <div style="display:flex;gap:14px;align-items:center;">
                             <label style="font-size:0.9rem;cursor:pointer;display:flex;align-items:center;gap:6px;">
@@ -133,19 +169,19 @@
                         <table>
                             <thead>
                                 <tr>
-                                    <th>PC / Device</th>
-                                    <th>Latest Ping</th>
-                                    <th>Supervised Diagnosis (XGBoost)</th>
-                                    <th>Possible Threat / Cause</th>
-                                    <th>Recommended Action</th>
+                                    <th style="min-width:140px;">PC / Device</th>
+                                    <th style="min-width:110px;">Latest Ping</th>
+                                    <th style="min-width:140px;">Supervised Diagnosis</th>
+                                    <th style="min-width:180px;">Possible Cause / Threat</th>
+                                    <th style="min-width:320px;">Prioritized Remediation &amp; Action Steps</th>
                                 </tr>
                             </thead>
-                            <tbody id="ml-recommendation-rows">
-                                <tr><td colspan="5">Loading supervised recommendations...</td></tr>
+                            <tbody id="ml-performance-rows">
+                                <tr><td colspan="5">Loading performance anomalies...</td></tr>
                             </tbody>
                         </table>
                     </div>
-                    <div id="ml-recommendations-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
+                    <div id="ml-performance-pagination" style="display: flex; gap: 8px; justify-content: center; align-items: center; margin-top: 16px;"></div>
                     <details style="margin-top:18px;border:1px solid rgba(128,128,128,0.25);border-radius:10px;padding:12px 16px;">
                         <summary style="cursor:pointer;font-weight:600;">1. 5-Probe ICMP Burst + Dual Reference Status (Local Gateway &amp; 1.1.1.1)</summary>
                         <div style="margin-top:12px;">
@@ -216,6 +252,8 @@
         let alertsCurrentPage = 1;
         let mlLabelsCurrentPage = 1;
         let mlRecommendationsCurrentPage = 1;
+        let mlUnreachableCurrentPage = 1;
+        let mlPerformanceCurrentPage = 1;
         let allMlLabels = [];
         let allMlRecommendations = [];
         const itemsPerPage = 10;
@@ -639,76 +677,242 @@
                     severity: (device.xgboost?.condition || device.current?.auto_rule_label) === 'Unreachable' ? 'critical' : ((device.xgboost?.condition || device.current?.auto_rule_label) === 'Normal' ? 'normal' : 'warning'),
                     possible_cause: 'Observed Ping Condition',
                     recommended_action: (device.suggestions && device.suggestions[0]?.action) || 'Continue monitoring.',
+                    action_steps: [],
                 };
                 return {
+                    telemetry_id: device.telemetry_id,
                     device_name: device.device_name,
                     target: device.target,
                     current: device.current || {},
                     ...rec,
                 };
             });
-            mlRecommendationsCurrentPage = 1;
+            mlUnreachableCurrentPage = 1;
+            mlPerformanceCurrentPage = 1;
             renderMlRecommendationsPage();
         }
 
-        function renderMlRecommendationsPage() {
-            const body = document.querySelector('#ml-recommendation-rows');
-            if (!body) return;
-            const showNormal = document.querySelector('#show-normal-recommendations')?.checked || false;
-            const filtered = showNormal
-                ? allMlRecommendations
-                : allMlRecommendations.filter((row) => row.condition !== 'Normal');
-
-            if (!allMlRecommendations.length) {
-                body.innerHTML = '<tr><td colspan="5">No monitored device ping samples yet.</td></tr>';
-                renderPaginationForTable('#ml-recommendations-pagination', 1, 0, goToMlRecommendationsPage);
-                return;
+        function getConditionActionSteps(row) {
+            if (Array.isArray(row.action_steps) && row.action_steps.length > 0) {
+                return row.action_steps;
             }
+            const condition = row.condition;
+            const latency = Number(row.current?.latency_median_ms || row.current?.latency_ms || 0);
 
-            if (!filtered.length) {
-                body.innerHTML = '<tr><td colspan="5" style="color:#2e7d32;font-weight:600;">✓ All monitored devices are currently Normal (&le;150ms, 0% loss) — no actions required.</td></tr>';
-                renderPaginationForTable('#ml-recommendations-pagination', 1, 0, goToMlRecommendationsPage);
-                return;
+            if (condition === 'Unreachable') {
+                return [
+                    'Verify hardware power and physical RJ-45 Ethernet link lights (PC & switch).',
+                    'Check router DHCP client lease table to confirm IP assignment & verify no IP collision.',
+                    'Verify endpoint Windows Firewall allows incoming ICMP Echo requests.',
+                    'Compare with Dual Reference (Gateway & 1.1.1.1) and check upstream switch port state.'
+                ];
             }
+            if (condition === 'High Latency') {
+                if (latency >= 300) {
+                    return [
+                        'Inspect top bandwidth-consuming processes or burst traffic on host.',
+                        'Enable switch port rate-limiting or ICMP flood protection.',
+                        'Compare latency with Dual Reference (Gateway & 1.1.1.1) to isolate host vs uplink.'
+                    ];
+                }
+                return [
+                    'Compare 5-probe burst jitter and 5-sample trend against Local Gateway & 1.1.1.1.',
+                    'Check for heavy downloads, backups, or cloud sync on this host.',
+                    'Apply QoS traffic prioritization on switch port.'
+                ];
+            }
+            if (condition === 'Packet Loss') {
+                return [
+                    'Compare packet loss against Dual Reference (Gateway & 1.1.1.1) to isolate link vs ISP drop.',
+                    'Inspect physical RJ-45 cable, connector, or Wi-Fi signal strength.',
+                    'Check switch port statistics for duplex mismatch or CRC errors.'
+                ];
+            }
+            return [
+                'Healthy 5-probe burst response verified (low jitter, 0% packet loss).',
+                'Continue routine monitoring.'
+            ];
+        }
 
-            const startIndex = (mlRecommendationsCurrentPage - 1) * itemsPerPage;
-            const endIndex = startIndex + itemsPerPage;
-            const pageRecs = filtered.slice(startIndex, endIndex);
-
+        function buildRecommendationRowHtml(row, includeRemediation = true) {
             const badgeStyle = (severity) => {
                 if (severity === 'critical') return 'background:rgba(211,47,47,0.14);color:#c62828;border:1px solid #c62828;';
                 if (severity === 'warning') return 'background:rgba(237,108,2,0.14);color:#ef6c00;border:1px solid #ef6c00;';
                 return 'background:rgba(46,125,50,0.14);color:#2e7d32;border:1px solid #2e7d32;';
             };
 
-            body.innerHTML = pageRecs.map((row) => {
-                const pingText = row.current.online
-                    ? `${row.current.latency_median_ms ?? '-'} ms`
-                    : 'No reply (Offline)';
-                const lossText = `${row.current.packet_loss ?? 0}% loss`;
-                const confidenceText = row.confidence != null
-                    ? `${Math.round(Number(row.confidence) * 100)}% confidence`
-                    : 'Rule preview (Train XGBoost)';
-                return `<tr>
-                    <td><strong>${escapeHtml(row.device_name)}</strong><br><small>${escapeHtml(row.target)}</small></td>
-                    <td>${escapeHtml(pingText)}<br><small>${escapeHtml(lossText)}</small></td>
-                    <td><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.85rem;${badgeStyle(row.severity)}">${escapeHtml(row.condition)}</span><br><small>${escapeHtml(confidenceText)}</small></td>
-                    <td><strong>${escapeHtml(row.possible_cause)}</strong></td>
-                    <td>${escapeHtml(row.recommended_action)}</td>
-                </tr>`;
-            }).join('');
+            const pingText = row.current.online
+                ? `${row.current.latency_median_ms ?? row.current.latency_ms ?? '-'} ms`
+                : 'No reply (Offline)';
+            const lossText = `${row.current.packet_loss ?? (row.current.online ? 0 : 100)}% loss`;
+            const confidenceText = row.confidence != null
+                ? `${Math.round(Number(row.confidence) * 100)}% confidence`
+                : (row.trained ? 'Trained XGBoost' : '5-probe preview (>150ms)');
 
-            renderPaginationForTable('#ml-recommendations-pagination', mlRecommendationsCurrentPage, filtered.length, goToMlRecommendationsPage);
+            let remediationCellHtml = '';
+            if (includeRemediation) {
+                const steps = getConditionActionSteps(row);
+                const stepsListHtml = `<ol style="margin:0 0 10px 0;padding-left:18px;font-size:0.87rem;line-height:1.45;">` +
+                    steps.map((step, idx) => `<li><strong>Step ${idx + 1}:</strong> ${escapeHtml(step)}</li>`).join('') +
+                    `</ol>`;
+
+                const dropdownOptionsHtml = steps.map((step, idx) => {
+                    const shortText = step.length > 55 ? step.slice(0, 52) + '...' : step;
+                    return `<option value="Step ${idx + 1}: ${escapeHtml(step)}">Step ${idx + 1}: ${escapeHtml(shortText)}</option>`;
+                }).join('');
+
+                const actionControlsHtml = `
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        <select class="ml-step-dropdown" style="padding:4px 8px;border-radius:4px;font-size:0.82rem;border:1px solid var(--border-color);background:var(--bg-surface);color:inherit;max-width:260px;" aria-label="Select Action Step">
+                            <option value="">-- Choose step to record --</option>
+                            ${dropdownOptionsHtml}
+                        </select>
+                        <button type="button" class="range-button" onclick="recordActionStep(this, ${row.telemetry_id || 0})" style="padding:4px 10px;font-size:0.82rem;">Record</button>
+                        <span class="ml-step-status" style="font-size:0.8rem;font-weight:600;"></span>
+                    </div>
+                `;
+                remediationCellHtml = `<td>${stepsListHtml}${actionControlsHtml}</td>`;
+            }
+
+            return `<tr>
+                <td><strong>${escapeHtml(row.device_name)}</strong><br><small>${escapeHtml(row.target)}</small></td>
+                <td>${escapeHtml(pingText)}<br><small>${escapeHtml(lossText)}</small></td>
+                <td><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.85rem;${badgeStyle(row.severity)}">${escapeHtml(row.condition)}</span><br><small>${escapeHtml(confidenceText)}</small></td>
+                <td><strong>${escapeHtml(row.possible_cause)}</strong></td>
+                ${remediationCellHtml}
+            </tr>`;
+        }
+
+        function renderMlRecommendationsPage() {
+            const bodyUnreachable = document.querySelector('#ml-unreachable-rows');
+            const bodyPerf = document.querySelector('#ml-performance-rows');
+            if (!bodyUnreachable || !bodyPerf) return;
+
+            const showNormal = document.querySelector('#show-normal-recommendations')?.checked || false;
+
+            // Separate Outages (Unreachable) from Performance Anomalies (High Latency & Packet Loss)
+            const unreachableList = allMlRecommendations.filter((row) => row.condition === 'Unreachable' || (!row.current.online && row.condition !== 'Normal'));
+            const perfList = showNormal
+                ? allMlRecommendations.filter((row) => row.condition !== 'Unreachable' && row.current.online)
+                : allMlRecommendations.filter((row) => (row.condition === 'High Latency' || row.condition === 'Packet Loss' || row.condition?.includes('Early Warning')) && row.current.online);
+
+            // Update Header Count Badges
+            const unreachablePill = document.querySelector('#ml-unreachable-count-pill');
+            if (unreachablePill) {
+                unreachablePill.textContent = `${unreachableList.length} Unreachable`;
+                unreachablePill.className = `status-pill ${unreachableList.length > 0 ? 'status-down' : 'status-normal'}`;
+            }
+
+            const rawPerfCount = allMlRecommendations.filter((row) => (row.condition === 'High Latency' || row.condition === 'Packet Loss' || row.condition?.includes('Early Warning')) && row.current.online).length;
+            const perfPill = document.querySelector('#ml-performance-count-pill');
+            if (perfPill) {
+                perfPill.textContent = `${rawPerfCount} Anomalies`;
+                perfPill.className = `status-pill ${rawPerfCount > 0 ? 'status-warning' : 'status-normal'}`;
+            }
+
+            // Spot 1: Render Unreachable Devices (4 columns)
+            if (!allMlRecommendations.length) {
+                bodyUnreachable.innerHTML = '<tr><td colspan="4">No monitored device ping samples yet.</td></tr>';
+                renderPaginationForTable('#ml-unreachable-pagination', 1, 0, goToMlUnreachablePage);
+            } else if (!unreachableList.length) {
+                bodyUnreachable.innerHTML = '<tr><td colspan="4" style="color:#2e7d32;font-weight:600;">✓ No unreachable devices. All monitored endpoints are responding to ICMP pings.</td></tr>';
+                renderPaginationForTable('#ml-unreachable-pagination', 1, 0, goToMlUnreachablePage);
+            } else {
+                const startIndex = (mlUnreachableCurrentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const pageRows = unreachableList.slice(startIndex, endIndex);
+                bodyUnreachable.innerHTML = pageRows.map((r) => buildRecommendationRowHtml(r, false)).join('');
+                renderPaginationForTable('#ml-unreachable-pagination', mlUnreachableCurrentPage, unreachableList.length, goToMlUnreachablePage);
+            }
+
+            // Spot 2: Render Performance Anomalies (High Latency & Packet Loss, 5 columns)
+            if (!allMlRecommendations.length) {
+                bodyPerf.innerHTML = '<tr><td colspan="5">No monitored device ping samples yet.</td></tr>';
+                renderPaginationForTable('#ml-performance-pagination', 1, 0, goToMlPerformancePage);
+            } else if (!perfList.length) {
+                bodyPerf.innerHTML = '<tr><td colspan="5" style="color:#2e7d32;font-weight:600;">✓ No performance anomalies detected. All active devices are Normal (&le;150ms, 0% loss).</td></tr>';
+                renderPaginationForTable('#ml-performance-pagination', 1, 0, goToMlPerformancePage);
+            } else {
+                const startIndex = (mlPerformanceCurrentPage - 1) * itemsPerPage;
+                const endIndex = startIndex + itemsPerPage;
+                const pageRows = perfList.slice(startIndex, endIndex);
+                bodyPerf.innerHTML = pageRows.map((r) => buildRecommendationRowHtml(r, true)).join('');
+                renderPaginationForTable('#ml-performance-pagination', mlPerformanceCurrentPage, perfList.length, goToMlPerformancePage);
+            }
+        }
+
+        function goToMlUnreachablePage(pageNum) {
+            mlUnreachableCurrentPage = pageNum;
+            renderMlRecommendationsPage();
+        }
+
+        function goToMlPerformancePage(pageNum) {
+            mlPerformanceCurrentPage = pageNum;
+            renderMlRecommendationsPage();
+        }
+
+        function goToMlRecommendationsPage(pageNum) {
+            mlPerformanceCurrentPage = pageNum;
+            renderMlRecommendationsPage();
+        }
+
+        async function recordActionStep(button, telemetryId) {
+            const container = button.closest('div');
+            const select = container ? container.querySelector('.ml-step-dropdown') : null;
+            const statusSpan = container ? container.querySelector('.ml-step-status') : null;
+            const selectedStep = select ? select.value : '';
+
+            if (!selectedStep) {
+                if (statusSpan) {
+                    statusSpan.style.color = '#ef6c00';
+                    statusSpan.textContent = 'Select step first';
+                }
+                return;
+            }
+
+            button.disabled = true;
+            if (statusSpan) {
+                statusSpan.style.color = 'var(--text-muted)';
+                statusSpan.textContent = 'Recording...';
+            }
+
+            try {
+                await requestJson(`/api/ml/recommendation-feedback/${telemetryId}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        suggestion_id: selectedStep,
+                        action: selectedStep
+                    })
+                });
+                if (statusSpan) {
+                    statusSpan.style.color = '#2e7d32';
+                    statusSpan.textContent = '✓ Recorded';
+                }
+                const actionStatus = document.querySelector('#ml-action-status');
+                if (actionStatus) {
+                    actionStatus.textContent = `Action step recorded (${selectedStep}). Perform remediation check.`;
+                }
+                setTimeout(() => {
+                    if (statusSpan) statusSpan.textContent = '';
+                }, 4000);
+            } catch (error) {
+                if (statusSpan) {
+                    statusSpan.style.color = '#c62828';
+                    statusSpan.textContent = 'Failed';
+                }
+                const actionStatus = document.querySelector('#ml-action-status');
+                if (actionStatus) {
+                    actionStatus.textContent = error.message;
+                }
+            } finally {
+                button.disabled = false;
+            }
         }
 
         function goToMlLabelsPage(pageNum) {
             mlLabelsCurrentPage = pageNum;
             renderMlLabels({samples: allMlLabels, labels: document.querySelector('#ml-label-rows') ? Array.from(document.querySelectorAll('#ml-label-rows select option')).filter((o, i) => i > 0 && !o.disabled).map(o => o.value).filter((v, i, a) => a.indexOf(v) === i) : []});
-        }
-
-        function goToMlRecommendationsPage(pageNum) {
-            mlRecommendationsCurrentPage = pageNum;
-            renderMlRecommendationsPage();
         }
 
         async function refreshStatus() {
@@ -1234,7 +1438,8 @@
             switchView(targetView, false);
         });
 
-        document.querySelector('#ml-recommendation-rows').addEventListener('click', (event) => {
+        const mlOldRecRows = document.querySelector('#ml-recommendation-rows');
+        if (mlOldRecRows) mlOldRecRows.addEventListener('click', (event) => {
             const button = event.target.closest('[data-select-suggestion]');
             if (button) selectMlRecommendation(Number(button.dataset.selectTelemetry), button.dataset.selectSuggestion, button);
         });

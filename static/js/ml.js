@@ -5,6 +5,8 @@
 let mlInsightsCurrentPage = 1;
 let mlLabelsCurrentPage = 1;
 let mlRecommendationsCurrentPage = 1;
+let mlUnreachableCurrentPage = 1;
+let mlPerformanceCurrentPage = 1;
 let allMlRecords = [];
 let allMlLabels = [];
 let allMlRecommendations = [];
@@ -212,8 +214,10 @@ function renderMlRecommendations(devices) {
             severity: (device.xgboost?.condition || device.current?.auto_rule_label) === 'Unreachable' ? 'critical' : ((device.xgboost?.condition || device.current?.auto_rule_label) === 'Normal' ? 'normal' : 'warning'),
             possible_cause: 'Observed Ping Condition',
             recommended_action: (device.suggestions && device.suggestions[0]?.action) || 'Continue monitoring.',
+            action_steps: device.supervised_recommendation?.action_steps || [],
         };
         return {
+            telemetry_id: device.telemetry_id || device.current?.telemetry_id || 0,
             device_name: device.device_name,
             target: device.target,
             current: device.current || {},
@@ -222,65 +226,217 @@ function renderMlRecommendations(devices) {
             ...rec,
         };
     });
+    mlUnreachableCurrentPage = 1;
+    mlPerformanceCurrentPage = 1;
     mlRecommendationsCurrentPage = 1;
     renderMlRecommendationsPage();
 }
 
-function renderMlRecommendationsPage() {
-    const body = document.querySelector('#ml-recommendation-rows');
-    if (!body) return;
-    const showNormal = document.querySelector('#show-normal-recommendations')?.checked || false;
-    const filtered = showNormal
-        ? allMlRecommendations
-        : allMlRecommendations.filter((row) => row.condition !== 'Normal');
-
-    if (!allMlRecommendations.length) {
-        body.innerHTML = '<tr><td colspan="7">No monitored device ping samples yet.</td></tr>';
-        renderPaginationForTable('#ml-recommendations-pagination', 1, 0, goToMlRecommendationsPage);
-        return;
+function getConditionActionSteps(row) {
+    if (Array.isArray(row.action_steps) && row.action_steps.length > 0) {
+        return row.action_steps;
     }
+    const condition = row.condition;
+    const latency = Number(row.current?.latency_median_ms || row.current?.latency_ms || 0);
 
-    if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="7" style="color:#2e7d32;font-weight:600;">✓ All monitored devices are currently Normal (5-probe burst healthy, 0% loss) — no actions required.</td></tr>';
-        renderPaginationForTable('#ml-recommendations-pagination', 1, 0, goToMlRecommendationsPage);
-        return;
+    if (condition === 'Unreachable') {
+        return [
+            'Verify hardware power and physical RJ-45 Ethernet link lights (PC & switch).',
+            'Check router DHCP client lease table to confirm IP assignment & verify no IP collision.',
+            'Verify endpoint Windows Firewall allows incoming ICMP Echo requests.',
+            'Compare with Dual Reference (Gateway & 1.1.1.1) and check upstream switch port state.'
+        ];
     }
+    if (condition === 'High Latency') {
+        if (latency >= 300) {
+            return [
+                'Inspect top bandwidth-consuming processes or burst traffic on host.',
+                'Enable switch port rate-limiting or ICMP flood protection.',
+                'Compare latency with Dual Reference (Gateway & 1.1.1.1) to isolate host vs uplink.'
+            ];
+        }
+        return [
+            'Compare 5-probe burst jitter and 5-sample trend against Local Gateway & 1.1.1.1.',
+            'Check for heavy downloads, backups, or cloud sync on this host.',
+            'Apply QoS traffic prioritization on switch port.'
+        ];
+    }
+    if (condition === 'Packet Loss') {
+        return [
+            'Compare packet loss against Dual Reference (Gateway & 1.1.1.1) to isolate link vs ISP drop.',
+            'Inspect physical RJ-45 cable, connector, or Wi-Fi signal strength.',
+            'Check switch port statistics for duplex mismatch or CRC errors.'
+        ];
+    }
+    return [
+        'Healthy 5-probe burst response verified (low jitter, 0% packet loss).',
+        'Continue routine monitoring.'
+    ];
+}
 
-    const startIndex = (mlRecommendationsCurrentPage - 1) * mlItemsPerPage;
-    const endIndex = startIndex + mlItemsPerPage;
-    const pageRecs = filtered.slice(startIndex, endIndex);
-
+function buildRecommendationRowHtml(row, includeRemediation = true) {
     const badgeStyle = (severity) => {
         if (severity === 'critical') return 'background:rgba(211,47,47,0.14);color:#c62828;border:1px solid #c62828;';
         if (severity === 'warning') return 'background:rgba(237,108,2,0.14);color:#ef6c00;border:1px solid #ef6c00;';
         return 'background:rgba(46,125,50,0.14);color:#2e7d32;border:1px solid #2e7d32;';
     };
 
-    body.innerHTML = pageRecs.map((row) => {
-        const pingText = row.current.online
-            ? `${row.current.latency_min_ms ?? '-'}/${row.current.latency_median_ms ?? '-'}/${row.current.latency_max_ms ?? '-'} ms (jitter ${row.current.latency_jitter_ms ?? 0} ms)`
-            : 'No reply (Offline)';
-        const lossText = `${row.current.packet_loss ?? 0}% loss`;
-        const confidenceText = row.confidence != null
-            ? `${Math.round(Number(row.confidence) * 100)}% confidence`
-            : 'Rule preview (Train XGBoost)';
-        return `<tr>
-            <td><strong>${escapeHtml(row.device_name)}</strong><br><small>${escapeHtml(row.target)}</small></td>
-            <td>${escapeHtml(pingText)}<br><small>${escapeHtml(lossText)}</small></td>
-            <td>${escapeHtml(modelOutputText(row.isolation_forest, 'isolation_forest'))}</td>
-            <td>${escapeHtml(modelOutputText(row.gru, 'gru'))}<br><small>${escapeHtml(riskOutputText(row.gru))}</small></td>
-            <td><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.85rem;${badgeStyle(row.severity)}">${escapeHtml(row.condition)}</span><br><small>${escapeHtml(confidenceText)}</small></td>
-            <td><strong>${escapeHtml(row.possible_cause)}</strong></td>
-            <td>${escapeHtml(row.recommended_action)}</td>
-        </tr>`;
-    }).join('');
+    const pingText = row.current.online
+        ? `${row.current.latency_median_ms ?? row.current.latency_ms ?? '-'} ms`
+        : 'No reply (Offline)';
+    const lossText = `${row.current.packet_loss ?? (row.current.online ? 0 : 100)}% loss`;
+    const confidenceText = row.confidence != null
+        ? `${Math.round(Number(row.confidence) * 100)}% confidence`
+        : (row.trained ? 'Trained XGBoost' : '5-probe preview (>150ms)');
 
-    renderPaginationForTable('#ml-recommendations-pagination', mlRecommendationsCurrentPage, filtered.length, goToMlRecommendationsPage);
+    let remediationCellHtml = '';
+    if (includeRemediation) {
+        const steps = getConditionActionSteps(row);
+        const stepsListHtml = `<ol style="margin:0 0 10px 0;padding-left:18px;font-size:0.87rem;line-height:1.45;">` +
+            steps.map((step, idx) => `<li><strong>Step ${idx + 1}:</strong> ${escapeHtml(step)}</li>`).join('') +
+            `</ol>`;
+
+        const dropdownOptionsHtml = steps.map((step, idx) => {
+            const shortText = step.length > 55 ? step.slice(0, 52) + '...' : step;
+            return `<option value="Step ${idx + 1}: ${escapeHtml(step)}">Step ${idx + 1}: ${escapeHtml(shortText)}</option>`;
+        }).join('');
+
+        const actionControlsHtml = `
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                <select class="ml-step-dropdown" style="padding:4px 8px;border-radius:4px;font-size:0.82rem;border:1px solid var(--border-color);background:var(--bg-surface);color:inherit;max-width:260px;" aria-label="Select Action Step">
+                    <option value="">-- Choose step to record --</option>
+                    ${dropdownOptionsHtml}
+                </select>
+                <button type="button" class="range-button" onclick="recordActionStep(this, ${row.telemetry_id || 0})" style="padding:4px 10px;font-size:0.82rem;">Record</button>
+                <span class="ml-step-status" style="font-size:0.8rem;font-weight:600;"></span>
+            </div>
+        `;
+        remediationCellHtml = `<td>${stepsListHtml}${actionControlsHtml}</td>`;
+    }
+
+    return `<tr>
+        <td><strong>${escapeHtml(row.device_name)}</strong><br><small>${escapeHtml(row.target)}</small></td>
+        <td>${escapeHtml(pingText)}<br><small>${escapeHtml(lossText)}</small></td>
+        <td><span style="display:inline-block;padding:3px 10px;border-radius:999px;font-weight:600;font-size:0.85rem;${badgeStyle(row.severity)}">${escapeHtml(row.condition)}</span><br><small>${escapeHtml(confidenceText)}</small></td>
+        <td><strong>${escapeHtml(row.possible_cause)}</strong></td>
+        ${remediationCellHtml}
+    </tr>`;
+}
+
+function renderMlRecommendationsPage() {
+    const bodyUnreachable = document.querySelector('#ml-unreachable-rows');
+    const bodyPerf = document.querySelector('#ml-performance-rows');
+    if (!bodyUnreachable || !bodyPerf) return;
+
+    const showNormal = document.querySelector('#show-normal-recommendations')?.checked || false;
+
+    // Separate Outages (Unreachable) from Performance Anomalies (High Latency & Packet Loss)
+    const unreachableList = allMlRecommendations.filter((row) => row.condition === 'Unreachable' || (!row.current.online && row.condition !== 'Normal'));
+    const perfList = showNormal
+        ? allMlRecommendations.filter((row) => row.condition !== 'Unreachable' && row.current.online)
+        : allMlRecommendations.filter((row) => (row.condition === 'High Latency' || row.condition === 'Packet Loss' || row.condition?.includes('Early Warning')) && row.current.online);
+
+    // Update Header Count Badges
+    const unreachablePill = document.querySelector('#ml-unreachable-count-pill');
+    if (unreachablePill) {
+        unreachablePill.textContent = `${unreachableList.length} Unreachable`;
+        unreachablePill.className = `status-pill ${unreachableList.length > 0 ? 'status-down' : 'status-normal'}`;
+    }
+
+    const rawPerfCount = allMlRecommendations.filter((row) => (row.condition === 'High Latency' || row.condition === 'Packet Loss' || row.condition?.includes('Early Warning')) && row.current.online).length;
+    const perfPill = document.querySelector('#ml-performance-count-pill');
+    if (perfPill) {
+        perfPill.textContent = `${rawPerfCount} Anomalies`;
+        perfPill.className = `status-pill ${rawPerfCount > 0 ? 'status-warning' : 'status-normal'}`;
+    }
+
+    // Spot 1: Render Unreachable Devices (4 columns)
+    if (!allMlRecommendations.length) {
+        bodyUnreachable.innerHTML = '<tr><td colspan="4">No monitored device ping samples yet.</td></tr>';
+        renderPaginationForTable('#ml-unreachable-pagination', 1, 0, goToMlUnreachablePage);
+    } else if (!unreachableList.length) {
+        bodyUnreachable.innerHTML = '<tr><td colspan="4" style="color:#2e7d32;font-weight:600;">✓ No unreachable devices. All monitored endpoints are responding to ICMP pings.</td></tr>';
+        renderPaginationForTable('#ml-unreachable-pagination', 1, 0, goToMlUnreachablePage);
+    } else {
+        const startIndex = (mlUnreachableCurrentPage - 1) * mlItemsPerPage;
+        const endIndex = startIndex + mlItemsPerPage;
+        const pageRows = unreachableList.slice(startIndex, endIndex);
+        bodyUnreachable.innerHTML = pageRows.map((r) => buildRecommendationRowHtml(r, false)).join('');
+        renderPaginationForTable('#ml-unreachable-pagination', mlUnreachableCurrentPage, unreachableList.length, goToMlUnreachablePage);
+    }
+
+    // Spot 2: Render Performance Anomalies (High Latency & Packet Loss, 5 columns)
+    if (!allMlRecommendations.length) {
+        bodyPerf.innerHTML = '<tr><td colspan="5">No monitored device ping samples yet.</td></tr>';
+        renderPaginationForTable('#ml-performance-pagination', 1, 0, goToMlPerformancePage);
+    } else if (!perfList.length) {
+        bodyPerf.innerHTML = '<tr><td colspan="5" style="color:#2e7d32;font-weight:600;">✓ No performance anomalies detected. All active devices are Normal (&le;150ms, 0% loss).</td></tr>';
+        renderPaginationForTable('#ml-performance-pagination', 1, 0, goToMlPerformancePage);
+    } else {
+        const startIndex = (mlPerformanceCurrentPage - 1) * mlItemsPerPage;
+        const endIndex = startIndex + mlItemsPerPage;
+        const pageRows = perfList.slice(startIndex, endIndex);
+        bodyPerf.innerHTML = pageRows.map((r) => buildRecommendationRowHtml(r, true)).join('');
+        renderPaginationForTable('#ml-performance-pagination', mlPerformanceCurrentPage, perfList.length, goToMlPerformancePage);
+    }
+}
+
+function goToMlUnreachablePage(pageNum) {
+    mlUnreachableCurrentPage = pageNum;
+    renderMlRecommendationsPage();
+}
+
+function goToMlPerformancePage(pageNum) {
+    mlPerformanceCurrentPage = pageNum;
+    renderMlRecommendationsPage();
 }
 
 function goToMlRecommendationsPage(pageNum) {
-    mlRecommendationsCurrentPage = pageNum;
+    mlPerformanceCurrentPage = pageNum;
     renderMlRecommendationsPage();
+}
+
+async function recordActionStep(button, telemetryId) {
+    const container = button.closest('div');
+    const select = container ? container.querySelector('.ml-step-dropdown') : null;
+    const statusEl = container ? container.querySelector('.ml-step-status') : null;
+    const selectedStep = select ? select.value : '';
+
+    if (!selectedStep) {
+        if (statusEl) {
+            statusEl.style.color = '#ef6c00';
+            statusEl.textContent = 'Please choose a step first';
+        }
+        return;
+    }
+
+    if (button) button.disabled = true;
+    if (statusEl) {
+        statusEl.style.color = 'inherit';
+        statusEl.textContent = 'Recording...';
+    }
+
+    try {
+        await requestJson(`/api/ml/recommendation-feedback/${telemetryId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ suggestion_id: selectedStep }),
+        });
+        if (statusEl) {
+            statusEl.style.color = '#2e7d32';
+            statusEl.textContent = '✓ Recorded!';
+        }
+        setTimeout(() => {
+            if (statusEl) statusEl.textContent = '';
+        }, 3000);
+    } catch (err) {
+        if (statusEl) {
+            statusEl.style.color = '#c62828';
+            statusEl.textContent = 'Failed to record';
+        }
+    } finally {
+        if (button) button.disabled = false;
+    }
 }
 
 function renderNetworkReferences(data) {

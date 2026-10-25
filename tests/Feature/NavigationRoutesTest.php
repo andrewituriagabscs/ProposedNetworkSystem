@@ -59,6 +59,10 @@ class NavigationRoutesTest extends TestCase
         $response->assertViewHas('activeView', 'ml-insights');
         $response->assertSee('data-panel="ml-insights"', false);
         $response->assertSee('href="/ml-insights"', false);
+        $response->assertSee('id="ml-unreachable-rows"', false);
+        $response->assertSee('id="ml-performance-rows"', false);
+        $response->assertSee('Spot 1: Critical Outages', false);
+        $response->assertSee('Spot 2: Performance Anomalies', false);
     }
 
     public function test_settings_and_about_routes_load(): void
