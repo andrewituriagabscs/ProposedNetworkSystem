@@ -245,6 +245,21 @@ def _poll_switch_snmp(target: str) -> dict[str, Any]:
         return _empty_snmp_snapshot("error", f"{type(error).__name__}: {error}"[:240])
 
 
+def _get_database_dir() -> Path:
+    """Get the active database directory (shared_database if configured/available, otherwise BASE_DIR)."""
+    env_dir = os.environ.get("MONITORING_DB_DIR")
+    if env_dir:
+        p = Path(env_dir)
+        if not p.is_absolute():
+            p = (BASE_DIR / p).resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    shared_dir = (BASE_DIR.parent / "shared_database").resolve()
+    if shared_dir.exists():
+        return shared_dir
+    return BASE_DIR
+
+
 def _sanitize_building_name(name: str) -> str:
     """Sanitize building name for safe filesystem usage."""
     sanitized = re.sub(r'[\s/\\:*?"<>|]+', '_', name.strip())
@@ -257,7 +272,7 @@ def _get_active_building_name() -> str:
     global _active_building_name_cache
     if _active_building_name_cache:
         return _active_building_name_cache
-    master_db = BASE_DIR / "monitoring.db"
+    master_db = _get_database_dir() / "monitoring.db"
     if master_db.exists():
         try:
             with sqlite3.connect(master_db, timeout=10) as conn:
@@ -283,20 +298,21 @@ def _get_active_building_name() -> str:
 def _get_database_path_for_name(building_name: str) -> Path:
     """Get the database file path for a specific building name."""
     sanitized = _sanitize_building_name(building_name)
-    return BASE_DIR / f"monitoring_{sanitized}.db"
+    return _get_database_dir() / f"monitoring_{sanitized}.db"
 
 
 def _get_database_path() -> Path:
     """Get the database path based on the active building name."""
     active_name = _get_active_building_name()
+    db_dir = _get_database_dir()
     target_path = _get_database_path_for_name(active_name)
     if target_path.exists():
         return target_path
     if active_name == "Unknown Building":
-        unknown_db = BASE_DIR / "monitoring_Unknown_Building.db"
+        unknown_db = db_dir / "monitoring_Unknown_Building.db"
         if unknown_db.exists():
             return unknown_db
-        master_db = BASE_DIR / "monitoring.db"
+        master_db = db_dir / "monitoring.db"
         if master_db.exists():
             return master_db
     return target_path
@@ -321,10 +337,11 @@ def _utc_now() -> str:
 
 def _connect() -> sqlite3.Connection:
     db_path = _get_database_path()
-    connection = sqlite3.connect(db_path, timeout=10)
+    connection = sqlite3.connect(db_path, timeout=30)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA journal_mode=WAL")
-    connection.execute("PRAGMA synchronous=FULL")
+    connection.execute("PRAGMA busy_timeout=30000")
+    connection.execute("PRAGMA synchronous=NORMAL")
     return connection
 
 
@@ -1659,7 +1676,7 @@ def save_building_name(name: str) -> str:
 
     _initialize_database_file(target_path, clean_name)
 
-    master_db = BASE_DIR / "monitoring.db"
+    master_db = _get_database_dir() / "monitoring.db"
     try:
         with sqlite3.connect(master_db, timeout=10) as master_conn:
             master_conn.execute(
@@ -1692,7 +1709,7 @@ def switch_to_database(name: str) -> str:
     target_path = _get_database_path_for_name(clean_name)
 
     if not target_path.exists():
-        for db_file in BASE_DIR.glob("monitoring_*.db"):
+        for db_file in _get_database_dir().glob("monitoring_*.db"):
             try:
                 with sqlite3.connect(db_file, timeout=2) as conn:
                     conn.row_factory = sqlite3.Row
@@ -1706,12 +1723,12 @@ def switch_to_database(name: str) -> str:
             except Exception:
                 pass
 
-    if not target_path.exists() and (BASE_DIR / "monitoring.db").exists() and clean_name == "Unknown Building":
-        target_path = BASE_DIR / "monitoring.db"
+    if not target_path.exists() and (_get_database_dir() / "monitoring.db").exists() and clean_name == "Unknown Building":
+        target_path = _get_database_dir() / "monitoring.db"
 
     _initialize_database_file(target_path, clean_name)
 
-    master_db = BASE_DIR / "monitoring.db"
+    master_db = _get_database_dir() / "monitoring.db"
     try:
         with sqlite3.connect(master_db, timeout=10) as master_conn:
             master_conn.execute(
@@ -1742,7 +1759,7 @@ def get_available_databases() -> list[dict[str, str]]:
     databases = []
     seen_names = set()
     try:
-        for db_file in sorted(BASE_DIR.glob("monitoring_*.db")):
+        for db_file in sorted(_get_database_dir().glob("monitoring_*.db")):
             b_name = None
             try:
                 with sqlite3.connect(db_file, timeout=2) as conn:
@@ -1760,7 +1777,7 @@ def get_available_databases() -> list[dict[str, str]]:
                 databases.append({"name": b_name, "filename": db_file.name, "path": str(db_file)})
                 seen_names.add(b_name)
 
-        master_db = BASE_DIR / "monitoring.db"
+        master_db = _get_database_dir() / "monitoring.db"
         if master_db.exists():
             master_name = None
             try:
