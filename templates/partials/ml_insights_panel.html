@@ -124,7 +124,13 @@
             <div style="margin-top:12px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                     <small>Review and save condition labels (Normal, High Latency, Packet Loss, Unreachable) for 5-probe burst samples.</small>
-                    <button class="range-button" type="button" onclick="applyAutoRuleLabels(this)">✓ Confirm Suggested Labels</button>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                    <label style="font-size:0.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-weight:600;">
+                                        <input type="checkbox" id="toggle-uncertain-labels" onchange="toggleUncertainLabelsFilter(this)">
+                                        ⚡ Active Learning (Uncertain Samples)
+                                    </label>
+                                    <button class="range-button" type="button" onclick="applyAutoRuleLabels(this)">✓ Confirm Suggested Labels</button>
+                                </div>
                 </div>
                 <div class="table-wrap">
                     <table>

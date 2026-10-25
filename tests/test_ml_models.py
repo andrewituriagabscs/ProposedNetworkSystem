@@ -119,7 +119,8 @@ class ClassifierComparisonTest(unittest.TestCase):
         x = torch.randn(4, 5, 12)
         recon, forecast, temp_w, feat_w = model(x)
         self.assertEqual(recon.shape, (4, 5, 12))
-        self.assertEqual(forecast.shape, (4, 3))
+        self.assertEqual(forecast.shape, (4, 9))
+        self.assertEqual(forecast[:, :3].shape, (4, 3))
         self.assertEqual(temp_w.shape, (4, 5))
         self.assertEqual(feat_w.shape, (4, 12))
         # Ensure temporal attention weights sum to 1

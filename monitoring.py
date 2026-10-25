@@ -386,7 +386,11 @@ def _initialize_database_file(db_path: Path, building_name: str | None = None) -
                 model_version TEXT NOT NULL,
                 result TEXT NOT NULL,
                 confidence REAL NOT NULL,
-                status TEXT NOT NULL
+                status TEXT NOT NULL,
+                composite_risk REAL,
+                forecast_horizons TEXT,
+                xai_factors TEXT,
+                uncertainty REAL
             );
             CREATE TABLE IF NOT EXISTS condition_labels (
                 telemetry_id INTEGER PRIMARY KEY,
@@ -501,6 +505,18 @@ def _initialize_database_file(db_path: Path, building_name: str | None = None) -
             connection.execute("ALTER TABLE monitored_devices ADD COLUMN mac_address TEXT DEFAULT ''")
         if "device_type" not in monitored_columns:
             connection.execute("ALTER TABLE monitored_devices ADD COLUMN device_type TEXT DEFAULT 'pc'")
+        ml_columns = {row[1] for row in connection.execute("PRAGMA table_info(ml_records)")}
+        for col_name, col_type in (
+            ("composite_risk", "REAL"),
+            ("forecast_horizons", "TEXT"),
+            ("xai_factors", "TEXT"),
+            ("uncertainty", "REAL"),
+        ):
+            if col_name not in ml_columns:
+                try:
+                    connection.execute(f"ALTER TABLE ml_records ADD COLUMN {col_name} {col_type}")
+                except Exception:
+                    pass
         connection.commit()
 
 
@@ -1541,7 +1557,16 @@ def get_ml_labeling_samples(limit: int = 100) -> list[dict[str, Any]]:
             """,
             (max(1, min(int(limit), 500)),),
         ).fetchall()
-    return [_row_dict(row) for row in rows]
+    results = []
+    for row in rows:
+        d = _row_dict(row)
+        lat = float(d.get("latency_median_ms") or d.get("latency_ms") or 0.0)
+        loss = float(d.get("packet_loss") or 0.0)
+        is_uncertain = (120.0 <= lat <= 180.0) or (1.0 <= loss <= 30.0)
+        d["needs_review"] = is_uncertain
+        d["uncertainty_score"] = 0.45 if is_uncertain else 0.10
+        results.append(d)
+    return results
 
 
 def save_condition_label(telemetry_id: int, label: str) -> bool:
