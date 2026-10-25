@@ -113,5 +113,20 @@ class ClassifierComparisonTest(unittest.TestCase):
         self.assertAlmostEqual(float(vec[11]), 30.0) # ΔTime = 30s
 
 
+    def test_gru_seq2seq_attention_autoencoder_architecture(self):
+        import torch
+        model = ml_models._build_gru(torch, input_size=12, hidden_size=32)
+        x = torch.randn(4, 5, 12)
+        recon, forecast, temp_w, feat_w = model(x)
+        self.assertEqual(recon.shape, (4, 5, 12))
+        self.assertEqual(forecast.shape, (4, 3))
+        self.assertEqual(temp_w.shape, (4, 5))
+        self.assertEqual(feat_w.shape, (4, 12))
+        # Ensure temporal attention weights sum to 1
+        sums = torch.sum(temp_w, dim=1).detach().numpy()
+        for s in sums:
+            self.assertAlmostEqual(float(s), 1.0, places=4)
+
+
 if __name__ == "__main__":
     unittest.main()

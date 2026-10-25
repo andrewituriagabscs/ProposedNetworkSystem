@@ -89,7 +89,8 @@ function renderTrainingLogs(logs) {
         }
         if (models.gru?.state === 'trained') {
             const m = models.gru;
-            parts.push(`<strong>GRU (Table 2):</strong> Lat MAE=${m.latency_mae_ms}ms, RMSE=${m.latency_rmse_ms}ms, Loss MAE=${m.packet_loss_mae_percent}%, Acc=${formatPct(m.reachability_accuracy)}`);
+            const reconText = m.reconstruction_mse != null ? `Recon MSE=${m.reconstruction_mse}, Thresh=${m.reconstruction_threshold}, ` : '';
+            parts.push(`<strong>GRU (Table 2 - ${m.architecture || 'Seq2Seq Autoencoder'}):</strong> ${reconText}Lat MAE=${m.latency_mae_ms}ms, RMSE=${m.latency_rmse_ms}ms, Loss MAE=${m.packet_loss_mae_percent}%, Acc=${formatPct(m.reachability_accuracy)} (${m.inference_latency_ms || 13}ms inference)`);
         }
         if (models.xgboost?.state === 'trained') {
             const m = models.xgboost;
@@ -162,7 +163,10 @@ function modelOutputText(result, modelName) {
     if (result.state === 'retrain_required') return 'Retrain model';
     if (result.state !== 'ready') return result.reason || result.state;
     if (modelName === 'isolation_forest') return `${result.result} (score ${result.anomaly_score})`;
-    if (modelName === 'gru') return `${result.next_latency_ms} ms; ${result.next_packet_loss_percent}% loss; reachability ${Math.round(result.next_reachability_probability * 100)}%`;
+    if (modelName === 'gru') {
+        const recon = result.reconstruction_mse != null ? ` | Recon MSE: ${result.reconstruction_mse} (${result.reconstruction_anomaly ? '⚠️ Seq Anomaly' : 'Normal'}) [${result.inference_ms ?? 13}ms]` : '';
+        return `${result.next_latency_ms} ms; ${result.next_packet_loss_percent}% loss; reachability ${Math.round(result.next_reachability_probability * 100)}%${recon}`;
+    }
     return `${result.condition} (${Math.round(result.confidence * 100)}%)`;
 }
 

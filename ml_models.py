@@ -549,20 +549,70 @@ def _train_xgboost(samples: list[dict[str, Any]], labels: dict[int, str]):
     )
 
 
-def _build_gru(torch, input_size: int, hidden_size: int = 24):
+def _build_gru(torch, input_size: int, hidden_size: int = 32):
     from torch import nn
 
-    class PingGRU(nn.Module):
+    class MultiLevelAttention(nn.Module):
+        """Multi-level temporal and feature attention inspired by OT network intrusion research."""
+        def __init__(self, hidden_dim: int, feat_dim: int):
+            super().__init__()
+            self.temporal_fc = nn.Sequential(
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Tanh(),
+                nn.Linear(hidden_dim, 1, bias=False),
+            )
+            self.feature_gate = nn.Sequential(
+                nn.Linear(hidden_dim, feat_dim),
+                nn.Sigmoid(),
+            )
+
+        def forward(self, encoder_outputs):
+            energy = self.temporal_fc(encoder_outputs)
+            temporal_weights = torch.softmax(energy, dim=1)
+            context = torch.sum(encoder_outputs * temporal_weights, dim=1)
+            feature_weights = self.feature_gate(context)
+            return context, temporal_weights.squeeze(-1), feature_weights
+
+    class Seq2SeqAttentionAutoencoder(nn.Module):
+        """
+        GRU Sequence-to-Sequence Autoencoder with Multi-Level Attention.
+        Combines unsupervised sequence reconstruction anomaly detection with multi-step forecast.
+        """
         def __init__(self):
             super().__init__()
-            self.recurrent = nn.GRU(input_size, hidden_size, batch_first=True)
-            self.head = nn.Linear(hidden_size, 3)
+            self.input_size = input_size
+            self.hidden_size = hidden_size
+            self.encoder = nn.GRU(input_size, hidden_size, batch_first=True)
+            self.attention = MultiLevelAttention(hidden_size, input_size)
+            self.decoder_cell = nn.GRUCell(input_size + hidden_size, hidden_size)
+            self.reconstruction_head = nn.Linear(hidden_size, input_size)
+            self.forecast_head = nn.Sequential(
+                nn.Linear(hidden_size, 16),
+                nn.ReLU(),
+                nn.Linear(16, 3),
+            )
 
-        def forward(self, values):
-            output, _ = self.recurrent(values)
-            return self.head(output[:, -1, :])
+        def forward(self, x):
+            batch_size, seq_len, _ = x.shape
+            encoder_outputs, _ = self.encoder(x)
+            context, temp_weights, feat_weights = self.attention(encoder_outputs)
 
-    return PingGRU()
+            reconstructed = []
+            decoder_hidden = context
+            decoder_input = torch.zeros(batch_size, self.input_size, device=x.device)
+
+            for t in range(seq_len):
+                cell_input = torch.cat([decoder_input, context], dim=1)
+                decoder_hidden = self.decoder_cell(cell_input, decoder_hidden)
+                recon_step = self.reconstruction_head(decoder_hidden)
+                reconstructed.append(recon_step.unsqueeze(1))
+                decoder_input = x[:, t, :] if self.training else recon_step
+
+            reconstructed_seq = torch.cat(reconstructed, dim=1)
+            forecast = self.forecast_head(context)
+            return reconstructed_seq, forecast, temp_weights, feat_weights
+
+    return Seq2SeqAttentionAutoencoder()
 
 
 def _elapsed_seconds(previous: str | None, current: str | None) -> float:
@@ -817,36 +867,48 @@ def _train_gru(samples: list[dict[str, Any]]):
     train_y_scaled = target_scaler.transform(train_y[:, :2])
     train_reachability = train_y[:, 2:3]
 
+    import time
     torch.manual_seed(42)
     torch.set_num_threads(1)
-    model = _build_gru(torch, train_x.shape[-1])
+    model = _build_gru(torch, train_x.shape[-1], hidden_size=32)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
-    loss_function = nn.MSELoss()
+    recon_loss_fn = nn.MSELoss()
+    forecast_loss_fn = nn.MSELoss()
     reachability_loss = nn.BCEWithLogitsLoss()
     dataset = TensorDataset(
-        torch.from_numpy(train_x),
+        torch.from_numpy(train_x.astype("float32")),
         torch.from_numpy(train_y_scaled.astype("float32")),
         torch.from_numpy(train_reachability.astype("float32")),
     )
-    loader = DataLoader(dataset, batch_size=min(16, len(dataset)), shuffle=True)
+    loader = DataLoader(dataset, batch_size=min(32, len(dataset)), shuffle=True)
     model.train()
-    for _ in range(40):
+    for _ in range(25):
         for batch_x, batch_y, batch_reachability in loader:
             optimizer.zero_grad()
-            prediction = model(batch_x)
-            loss = loss_function(prediction[:, :2], batch_y) + reachability_loss(
+            recon_seq, prediction, _, _ = model(batch_x)
+            l_recon = recon_loss_fn(recon_seq, batch_x)
+            l_forecast = forecast_loss_fn(prediction[:, :2], batch_y) + reachability_loss(
                 prediction[:, 2:3], batch_reachability
             )
+            loss = l_recon + 0.5 * l_forecast
             loss.backward()
             optimizer.step()
 
     model.eval()
+    t_start = time.perf_counter()
     with torch.no_grad():
-        test_output = model(torch.from_numpy(test_x_scaled)).cpu().numpy()
-    predicted = target_scaler.inverse_transform(test_output[:, :2])
+        test_recon, test_output, test_temp_w, test_feat_w = model(torch.from_numpy(test_x_scaled.astype("float32")))
+    inference_latency_ms = round(((time.perf_counter() - t_start) * 1000.0) / max(1, len(test_x_scaled)), 3)
+
+    recon_errors = np.mean(np.square(test_recon.cpu().numpy() - test_x_scaled), axis=(1, 2))
+    mean_recon_mse = float(np.mean(recon_errors))
+    std_recon_mse = float(np.std(recon_errors))
+    recon_threshold = float(mean_recon_mse + 3.0 * std_recon_mse)
+
+    predicted = target_scaler.inverse_transform(test_output[:, :2].cpu().numpy())
     mae = np.mean(np.abs(predicted - test_y[:, :2]), axis=0)
     rmse = np.sqrt(np.mean(np.square(predicted - test_y[:, :2]), axis=0))
-    reachability_probability = 1 / (1 + np.exp(-test_output[:, 2]))
+    reachability_probability = 1 / (1 + np.exp(-test_output[:, 2].cpu().numpy()))
     reachability_accuracy = float(
         np.mean((reachability_probability >= 0.5) == (test_y[:, 2] >= 0.5))
     )
@@ -858,16 +920,23 @@ def _train_gru(samples: list[dict[str, Any]]):
             "target_scaler": target_scaler,
             "features": FEATURE_COLUMNS,
             "sequence_length": SEQUENCE_LENGTH,
-            "hidden_size": 24,
-            "version": "gru-ping-forecast-v3",
+            "hidden_size": 32,
+            "reconstruction_threshold": round(recon_threshold, 5),
+            "reconstruction_mean_mse": round(mean_recon_mse, 5),
+            "inference_latency_ms": inference_latency_ms,
+            "version": "gru-seq2seq-attention-v4",
         },
         MODEL_DIR / "gru_forecast.joblib",
     )
     return _result(
         "trained",
+        architecture="GRU Seq2Seq Attention Autoencoder",
         sequence_windows=len(sequences),
         temporal_test_windows=len(test_x),
         temporal_test_start=test_start,
+        reconstruction_mse=round(mean_recon_mse, 5),
+        reconstruction_threshold=round(recon_threshold, 5),
+        inference_latency_ms=inference_latency_ms,
         latency_mae_ms=round(float(mae[0]), 4),
         packet_loss_mae_percent=round(float(mae[1]), 4),
         latency_rmse_ms=round(float(rmse[0]), 4),
@@ -1026,9 +1095,10 @@ def get_ml_insights(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 import joblib
                 import numpy as np
                 import torch
+                import time
 
                 artifact = joblib.load(artifacts["gru"])
-                if artifact.get("version") != "gru-ping-forecast-v3" or tuple(artifact.get("features", ())) != FEATURE_COLUMNS:
+                if artifact.get("version") != "gru-seq2seq-attention-v4" or tuple(artifact.get("features", ())) != FEATURE_COLUMNS:
                     item["gru"] = {"state": "retrain_required"}
                     sequence_length = 0
                 else:
@@ -1051,11 +1121,26 @@ def get_ml_insights(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     model = _build_gru(torch, scaled.shape[-1], int(artifact["hidden_size"]))
                     model.load_state_dict(artifact["state_dict"])
                     model.eval()
+                    t_eval_start = time.perf_counter()
                     with torch.no_grad():
-                        prediction = model(torch.from_numpy(scaled)).cpu().numpy()
-                    forecast = artifact["target_scaler"].inverse_transform(prediction[:, :2])[0]
+                        recon_seq, prediction, temp_w, feat_w = model(torch.from_numpy(scaled))
+                    inference_ms = round((time.perf_counter() - t_eval_start) * 1000.0, 2)
+
+                    recon_diff = recon_seq.cpu().numpy()[0] - scaled[0]
+                    recon_feat_errors = np.mean(np.square(recon_diff), axis=0)
+                    recon_mse = round(float(np.mean(recon_feat_errors)), 5)
+                    recon_threshold = float(artifact.get("reconstruction_threshold") or 2.5)
+                    is_recon_anomaly = recon_mse > recon_threshold
+
+                    top_feat_idx = int(np.argmax(recon_feat_errors))
+                    top_feat_name = FEATURE_COLUMNS[top_feat_idx] if top_feat_idx < len(FEATURE_COLUMNS) else "traffic_variance"
+
+                    temp_weights_arr = temp_w.cpu().numpy()[0]
+                    max_temp_step = int(np.argmax(temp_weights_arr)) + 1
+
+                    forecast = artifact["target_scaler"].inverse_transform(prediction[:, :2].cpu().numpy())[0]
                     reachability_probability = float(
-                        1 / (1 + np.exp(-np.clip(prediction[0, 2], -60, 60)))
+                        1 / (1 + np.exp(-np.clip(prediction[0, 2].item(), -60, 60)))
                     )
                     next_latency = round(max(0.0, float(forecast[0])), 3)
                     next_packet_loss = round(min(100.0, max(0.0, float(forecast[1]))), 2)
@@ -1082,13 +1167,29 @@ def get_ml_insights(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     )
                     item["gru"] = {
                         "state": "ready",
+                        "architecture": "GRU Seq2Seq Attention Autoencoder",
                         "next_latency_ms": next_latency,
                         "next_packet_loss_percent": next_packet_loss,
                         "next_reachability_probability": round(reachability_probability, 4),
+                        "reconstruction_mse": recon_mse,
+                        "reconstruction_threshold": round(recon_threshold, 5),
+                        "reconstruction_anomaly": is_recon_anomaly,
+                        "top_feature_deviation": top_feat_name,
+                        "inference_ms": inference_ms,
+                        "temporal_step_focus": max_temp_step,
                         "risk_indicators": {
                             "bottleneck": bottleneck_level,
                             "congestion": congestion_level,
                             "failure": failure_level,
+                            "seq2seq_anomaly": "High" if is_recon_anomaly else "Low",
+                        },
+                        "seq2seq_autoencoder": {
+                            "reconstruction_mse": recon_mse,
+                            "threshold": round(recon_threshold, 5),
+                            "anomaly": is_recon_anomaly,
+                            "top_feature_deviation": top_feat_name,
+                            "inference_ms": inference_ms,
+                            "attention_focus_step": max_temp_step,
                         },
                     }
             except Exception as error:
