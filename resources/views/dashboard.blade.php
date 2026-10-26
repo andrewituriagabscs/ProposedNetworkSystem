@@ -89,9 +89,9 @@
             <section class="view-panel data-panel {{ $currentView === 'ml-insights' ? 'active' : '' }}" data-panel="ml-insights" {{ $currentView === 'ml-insights' ? '' : 'hidden' }}>
                 <header class="ml-heading">
                     <div>
-                        <p class="eyebrow">SYSTEM 1: Existing / Baseline Approach</p>
+                        <p class="eyebrow">SYSTEM 2: Proposed / Enhanced Approach</p>
                         <h1>ML Insights</h1>
-                        <p class="panel-intro">1. Basic Ping Collection (Min/Median/Max RTT + Dual Ref) &rarr; 2. Static Feature Extraction (12 Temporal Features: Jitter, &Delta;Latency, &Delta;Loss, 5-Sample Trend, Streak, &Delta;Time) &rarr; 3. Human-in-the-Loop Labeling (Rigid &gt;150ms Threshold) &rarr; 4. Train &amp; Run the 3 Models (Isolation Forest, GRU, XGBoost).</p>
+                        <p class="panel-intro">1. Burst Ping Collection (Min/Median/Max RTT + Dual Ref) &rarr; 2. Temporal Feature Extraction (12 Features: Jitter, &Delta;Latency, &Delta;Loss, 5-Sample Trend, Streak, &Delta;Time) &rarr; 3. Active Learning Labeling (Uncertainty Sampling HITL &bull; 65% Confidence Boundary) &rarr; 4. Multi-Horizon GRU Attention Autoencoder &amp; Explainable XGBoost Ensemble.</p>
                     </div>
                     <span class="status-pill status-normal">CLI-Trained Models</span>
                 </header>
@@ -982,7 +982,7 @@
             const classCounts = status.label_counts || {};
             const classText = Object.entries(classCounts).map(([label, count]) => `${label}: ${count}`).join(', ') || 'no rule labels';
             const featureList = (status.pipeline?.features || status.feature_columns || ['online', 'latency_ms', 'packet_loss', 'receive_ratio']).join(', ');
-            document.querySelector('#ml-status-line').textContent = `System 1 Baseline (${featureList}) — ${status.telemetry_samples} ping samples; ${status.labeled_samples} labeled samples (${classText}).`;
+            document.querySelector('#ml-status-line').textContent = `System 2 Enhanced (${featureList}) — ${status.telemetry_samples} ping samples; ${status.labeled_samples} labeled samples (${classText}).`;
             const trainedModels = Object.values(status.models || {}).filter((model) => model.state === 'trained').length;
             document.querySelector('#dashboard-valid-samples').textContent = status.telemetry_samples;
             document.querySelector('#dashboard-labeled-samples').textContent = status.labeled_samples;
@@ -1274,7 +1274,7 @@
 
         async function applyAutoRuleLabels(button) {
             if (button) button.disabled = true;
-            document.querySelector('#ml-action-status').textContent = 'Applying System 1 rigid >150ms rule labels to all ping samples...';
+            document.querySelector('#ml-action-status').textContent = 'Applying active learning condition labels to all ping samples...';
             try {
                 const result = await requestJson('/api/ml/auto-label', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({overwrite: true})});
                 await refreshMlPanel();
